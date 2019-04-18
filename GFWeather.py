@@ -1,21 +1,24 @@
 import requests
 from datetime import datetime
 from bs4 import BeautifulSoup
-import itchat
+#import itchat
 from apscheduler.schedulers.blocking import BlockingScheduler
 import time
-import city_dict
+from . import city_dict
 import yaml
+import threading
 
 
-class gfweather:
+class gfweather (threading.Thread):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.87 Safari/537.36",
     }
     dictum_channel_name = {1: 'ONE●一个', 2: '词霸（每日英语）'}
 
-    def __init__(self):
+    def __init__(self,core):
+        threading.Thread.__init__(self)
         self.girlfriend_list, self.alarm_hour, self.alarm_minute, self.dictum_channel = self.get_init_data()
+        self.itchat = core
 
     def get_init_data(self):
         '''
@@ -44,12 +47,12 @@ class gfweather:
             girlfriend['city_code'] = city_code
             girlfriend_list.append(girlfriend)
 
-            print_msg = f"女朋友的微信昵称：{girlfriend.get('wechat_name')}\n\t女友所在城市名称：{girlfriend.get('city_name')}\n\t" \
+            print_msg = f"好友的微信昵称：{girlfriend.get('wechat_name')}\n\t女友所在城市名称：{girlfriend.get('city_name')}\n\t" \
                 f"在一起的第一天日期：{girlfriend.get('start_date')}\n\t最后一句为：{girlfriend.get('sweet_words')}\n"
             init_msg += print_msg
 
         print(u"*" * 50)
-        print(init_msg)
+        #print(init_msg)
 
         hour, minute = [int(x) for x in alarm_timed.split(':')]
         return girlfriend_list, hour, minute, dictum_channel
@@ -67,12 +70,13 @@ class gfweather:
             :return: True ，还在线，False 不在线了
             '''
             try:
-                if itchat.search_friends():
+                if self.itchat.search_friends():
                     return True
             except:
                 return False
             return True
 
+        self.itchat
         if online():
             return True
         # 仅仅判断是否在线
@@ -82,8 +86,8 @@ class gfweather:
         # 登陆，尝试 5 次
         for _ in range(5):
             # 命令行显示登录二维码
-            # itchat.auto_login(enableCmdQR=True)
-            itchat.auto_login()
+            # self.itchat.auto_login(enableCmdQR=True)
+            self.itchat.auto_login()
             if online():
                 print('登录成功')
                 return True
@@ -99,9 +103,12 @@ class gfweather:
         # 自动登录
         if not self.is_online(auto_login=True):
             return
+        print('正等待向好友发送消息....')
         for girlfriend in self.girlfriend_list:
             wechat_name = girlfriend.get('wechat_name')
-            friends = itchat.search_friends(name=wechat_name)
+            friends = self.itchat.search_friends(name=wechat_name)
+            if not friends:
+                friends = self.itchat.search_chatrooms(name=wechat_name)
             if not friends:
                 print('昵称错误')
                 return
@@ -143,8 +150,10 @@ class gfweather:
             print(f'给『{wechat_name}』发送的内容是:\n{today_msg}')
 
             if not is_test:
+
                 if self.is_online(auto_login=True):
-                    itchat.send(today_msg, toUserName=name_uuid)
+                    self.itchat.send(today_msg, toUserName=name_uuid)
+
                 # 防止信息发送过快。
                 time.sleep(5)
 
@@ -231,11 +240,11 @@ class gfweather:
             if start_date:
                 start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
                 day_delta = (datetime.now() - start_datetime).days
-                delta_msg = f'宝贝这是我们在一起的第 {day_delta} 天。\n'
+                delta_msg = f'这是我们在一起的第 {day_delta} 天。\n'
             else:
                 delta_msg = ''
 
-            today_msg = f'{today_time}\n{delta_msg}{notice}。\n{temperature}\n{wind}\n{aqi}\n{dictum_msg}{sweet_words if sweet_words else ""}\n'
+            today_msg = f'{today_time}\n{delta_msg}{notice}。\n\n    {temperature}\n    {wind}\n    {aqi}\n\n{dictum_msg}                    >>{sweet_words if sweet_words else ""}\n'
             return today_msg
 
 
